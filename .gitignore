@@ -1,0 +1,33 @@
+# Environment variables
+.env
+
+# Docker volumes - exclude data but include custom modules and configs
+librenms/*
+!librenms/config/
+!librenms/custom-modules/
+!librenms/includes/
+!librenms/database/
+
+# But ignore data files in those directories
+librenms/config/*.php.bak
+librenms/includes/**/*.bak
+
+db/*
+
+# Tests
+tests/venv/
+tests/__pycache__/
+tests/*.pyc
+
+# Backup files
+backups/
+*.tar.gz
+*.sql
+
+# Logs
+*.log
+librenms/logs/
+
+# OS files
+.DS_Store
+Thumbs.db

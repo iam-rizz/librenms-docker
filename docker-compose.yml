@@ -1,0 +1,143 @@
+services:
+  librenms:
+    image: librenms/librenms:latest
+    container_name: librenms
+    hostname: librenms
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    ports:
+      - "80:8000"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./librenms:/data
+    environment:
+      - TZ=${TZ}
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_TIMEOUT=${DB_TIMEOUT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - APP_KEY=${APP_KEY:-}
+    deploy:
+      resources:
+        limits:
+          memory: ${LIBRENMS_MEMORY}
+          cpus: '${LIBRENMS_CPU}'
+    restart: unless-stopped
+    networks:
+      - librenms_network
+
+  db:
+    image: mariadb:10.11
+    container_name: librenms_db
+    command:
+      - "mysqld"
+      - "--innodb-buffer-pool-size=${DB_INNODB_BUFFER_POOL}"
+      - "--innodb-log-file-size=${DB_INNODB_LOG_FILE_SIZE}"
+      - "--innodb-file-per-table=${DB_INNODB_FILE_PER_TABLE}"
+      - "--lower-case-table-names=${DB_LOWER_CASE_TABLE_NAMES}"
+      - "--character-set-server=${DB_CHARACTER_SET}"
+      - "--collation-server=${DB_COLLATION}"
+      - "--max-connections=${DB_MAX_CONNECTIONS}"
+      - "--max-user-connections=${DB_MAX_USER_CONNECTIONS}"
+      - "--thread-cache-size=${DB_THREAD_CACHE_SIZE}"
+      - "--table-open-cache=${DB_TABLE_OPEN_CACHE}"
+      - "--table-definition-cache=${DB_TABLE_DEFINITION_CACHE}"
+      - "--tmp-table-size=${DB_TMP_TABLE_SIZE}"
+      - "--max-heap-table-size=${DB_MAX_HEAP_TABLE_SIZE}"
+      - "--sort-buffer-size=${DB_SORT_BUFFER_SIZE}"
+      - "--read-buffer-size=${DB_READ_BUFFER_SIZE}"
+      - "--read-rnd-buffer-size=${DB_READ_RND_BUFFER_SIZE}"
+      - "--join-buffer-size=${DB_JOIN_BUFFER_SIZE}"
+      - "--skip-log-bin=${DB_SKIP_LOG_BIN}"
+      - "--performance-schema=${DB_PERFORMANCE_SCHEMA}"
+      - "--innodb-flush-log-at-trx-commit=${DB_INNODB_FLUSH_LOG_AT_TRX_COMMIT}"
+      - "--innodb-flush-method=${DB_INNODB_FLUSH_METHOD}"
+      - "--innodb-log-buffer-size=${DB_INNODB_LOG_BUFFER_SIZE}"
+      - "--innodb-read-io-threads=${DB_INNODB_READ_IO_THREADS}"
+      - "--innodb-write-io-threads=${DB_INNODB_WRITE_IO_THREADS}"
+      - "--wait-timeout=${DB_WAIT_TIMEOUT}"
+      - "--interactive-timeout=${DB_INTERACTIVE_TIMEOUT}"
+      - "--connect-timeout=${DB_CONNECT_TIMEOUT}"
+      - "--max-allowed-packet=${DB_MAX_ALLOWED_PACKET}"
+    volumes:
+      - ./db:/var/lib/mysql
+    environment:
+      - TZ=${TZ}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY}
+          cpus: '${DB_CPU}'
+    restart: unless-stopped
+    networks:
+      - librenms_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: librenms_redis
+    environment:
+      - TZ=${TZ}
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEMORY}
+          cpus: '${REDIS_CPU}'
+    restart: unless-stopped
+    networks:
+      - librenms_network
+
+  dispatcher:
+    image: librenms/librenms:latest
+    container_name: librenms_dispatcher
+    hostname: librenms-dispatcher
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - librenms
+      - redis
+    volumes:
+      - ./librenms:/data
+    environment:
+      - TZ=${TZ}
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - DISPATCHER_NODE_ID=${DISPATCHER_NODE_ID}
+      - SIDECAR_DISPATCHER=${SIDECAR_DISPATCHER}
+      - APP_KEY=${APP_KEY:-}
+    deploy:
+      resources:
+        limits:
+          memory: ${DISPATCHER_MEMORY}
+          cpus: '${DISPATCHER_CPU}'
+    restart: unless-stopped
+    networks:
+      - librenms_network
+
+networks:
+  librenms_network:
+    driver: bridge
+
+volumes:
+  librenms_data:
+  db_data:
