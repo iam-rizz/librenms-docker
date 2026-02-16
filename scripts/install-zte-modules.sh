@@ -65,7 +65,15 @@ echo -e "${GREEN}✓ Configuration copied${NC}\n"
 
 echo -e "${YELLOW}Step 5: Creating ONT database table...${NC}"
 
-docker exec "$CONTAINER_NAME" mysql -h db -u librenms -p"${DB_PASSWORD:-librenms}" librenms <<'EOF'
+# Load environment variables from .env file
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | grep -v '^$' | xargs)
+fi
+
+# Use the correct password from environment
+DB_PASS="${DB_PASSWORD:-librenms_password}"
+
+docker exec "$CONTAINER_NAME" mysql -h db -u librenms -p"$DB_PASS" librenms <<'EOF'
 CREATE TABLE IF NOT EXISTS `onts` (
     `ont_id` INT(11) NOT NULL AUTO_INCREMENT,
     `device_id` INT(11) NOT NULL,
@@ -91,7 +99,38 @@ EOF
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ ONT table created${NC}\n"
 else
-    echo -e "${YELLOW}⚠ Table may already exist or there was an error${NC}\n"
+    echo -e "${RED}✗ Failed to create ONT table${NC}"
+    echo -e "${YELLOW}Trying alternative method...${NC}\n"
+    
+    # Alternative: Use docker-compose exec with database container directly
+    docker-compose exec -T db mysql -u librenms -p"$DB_PASS" librenms <<'EOFALT'
+CREATE TABLE IF NOT EXISTS `onts` (
+    `ont_id` INT(11) NOT NULL AUTO_INCREMENT,
+    `device_id` INT(11) NOT NULL,
+    `pon_port` VARCHAR(32) NOT NULL,
+    `ont_index` INT(11) NOT NULL,
+    `serial_number` VARCHAR(64) DEFAULT NULL,
+    `model` VARCHAR(64) DEFAULT NULL,
+    `firmware_version` VARCHAR(64) DEFAULT NULL,
+    `status` ENUM('online', 'offline', 'dying-gasp', 'unknown') DEFAULT 'unknown',
+    `rx_power` DECIMAL(5,2) DEFAULT NULL,
+    `last_seen` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`ont_id`),
+    UNIQUE KEY `device_pon_ont` (`device_id`, `pon_port`, `ont_index`),
+    KEY `device_id` (`device_id`),
+    KEY `status` (`status`),
+    KEY `idx_device_status` (`device_id`, `status`),
+    KEY `idx_pon_port` (`pon_port`),
+    CONSTRAINT `onts_device_id_fk` FOREIGN KEY (`device_id`) 
+        REFERENCES `devices` (`device_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+EOFALT
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ ONT table created (alternative method)${NC}\n"
+    else
+        echo -e "${YELLOW}⚠ Could not create table. You may need to create it manually.${NC}\n"
+    fi
 fi
 
 echo -e "${YELLOW}Step 6: Setting file permissions...${NC}"
