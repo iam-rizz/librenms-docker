@@ -30,12 +30,16 @@ docker exec librenms ls -la /data/includes/polling/zte-*.inc.php 2>/dev/null || 
 echo -e "\n${YELLOW}Step 2: Installing modules to correct location (/opt/librenms)...${NC}"
 
 # Create directories
-docker exec -u root librenms mkdir -p /opt/librenms/includes/polling
+docker exec -u root librenms mkdir -p /opt/librenms/includes/polling/os
 docker exec -u root librenms mkdir -p /opt/librenms/includes/discovery/sensors/optical-power
 docker exec -u root librenms mkdir -p /opt/librenms/config.d
 
-# Copy modules
-echo "Copying polling modules..."
+# Copy OS-specific polling module (this is the key file that will be auto-loaded)
+echo "Copying OS-specific polling module for zxa10..."
+docker cp librenms/includes/polling/os/zxa10.inc.php librenms:/opt/librenms/includes/polling/os/
+
+# Also copy the standalone modules as backup
+echo "Copying standalone polling modules..."
 docker cp librenms/includes/polling/zte-optical-power.inc.php librenms:/opt/librenms/includes/polling/
 docker cp librenms/includes/polling/zte-ont-status.inc.php librenms:/opt/librenms/includes/polling/
 
@@ -48,6 +52,7 @@ docker cp librenms/config/zte-c300-config.php librenms:/opt/librenms/config.d/
 
 # Set permissions
 echo "Setting permissions..."
+docker exec -u root librenms chown -R librenms:librenms /opt/librenms/includes/polling/os/zxa10.inc.php 2>/dev/null || true
 docker exec -u root librenms chown -R librenms:librenms /opt/librenms/includes/polling/zte-*.inc.php 2>/dev/null || true
 docker exec -u root librenms chown -R librenms:librenms /opt/librenms/includes/discovery/zte-*.inc.php 2>/dev/null || true
 docker exec -u root librenms chown -R librenms:librenms /opt/librenms/includes/discovery/sensors/optical-power/zte-*.inc.php 2>/dev/null || true
@@ -56,6 +61,13 @@ docker exec -u root librenms chown -R librenms:librenms /opt/librenms/config.d/z
 echo -e "\n${YELLOW}Step 3: Verifying installation...${NC}"
 
 FILES_OK=true
+
+if docker exec librenms test -f /opt/librenms/includes/polling/os/zxa10.inc.php; then
+    echo -e "  ${GREEN}✓${NC} zxa10.inc.php (OS-specific polling - KEY FILE)"
+else
+    echo -e "  ${RED}✗${NC} zxa10.inc.php (OS-specific polling - KEY FILE)"
+    FILES_OK=false
+fi
 
 if docker exec librenms test -f /opt/librenms/includes/polling/zte-optical-power.inc.php; then
     echo -e "  ${GREEN}✓${NC} zte-optical-power.inc.php"
@@ -100,13 +112,17 @@ else
 fi
 
 echo -e "${YELLOW}Step 4: Testing module syntax...${NC}"
+docker exec librenms php -l /opt/librenms/includes/polling/os/zxa10.inc.php
 docker exec librenms php -l /opt/librenms/includes/polling/zte-optical-power.inc.php
 docker exec librenms php -l /opt/librenms/includes/polling/zte-ont-status.inc.php
 
 echo -e "\n${GREEN}=== Verification Complete ===${NC}\n"
 
-echo -e "${YELLOW}Next: Run discovery on your ZTE device:${NC}"
-echo "  docker exec -u librenms librenms /opt/librenms/lnms device:poll 1 -m discovery -v"
+echo -e "${YELLOW}IMPORTANT: The key file is zxa10.inc.php${NC}"
+echo "This file is automatically loaded when polling devices with os='zxa10'"
+echo ""
+echo -e "${YELLOW}Next: Run polling (NOT discovery) on your ZTE device:${NC}"
+echo "  docker exec -u librenms librenms /opt/librenms/poller.php -h 10.10.10.100 -d -m os"
 echo ""
 echo -e "${YELLOW}Then check for ONT data:${NC}"
 echo "  docker compose exec db mysql -u librenms -p'librenms_password' librenms -e \"SELECT COUNT(*) FROM onts WHERE device_id=1;\""
