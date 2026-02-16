@@ -23,7 +23,8 @@ tests/*.pyc
 backups/
 *.tar.gz
 *.sql
-
+tests/
+.gitignore
 # Logs
 *.log
 librenms/logs/
